@@ -1,0 +1,7 @@
+numpy
+polars
+matplotlib
+orjson
+torch
+scipy
+requests
