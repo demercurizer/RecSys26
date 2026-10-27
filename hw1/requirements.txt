@@ -5,3 +5,7 @@ orjson
 torch
 scipy
 requests
+pyarrow
+isal
+tqdm
+ipykernel

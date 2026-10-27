@@ -1,5 +1,7 @@
 from pathlib import Path
 import gzip
+import os
+import tempfile
 import orjson
 
 import pyarrow as pa
@@ -7,6 +9,36 @@ import pyarrow.parquet as pq
 import requests
 from tqdm.auto import tqdm
 from isal import igzip
+
+def download_file(url, dst, chunk_size=1024 * 1024):
+    """Download an unchanged source file atomically; reuse a nonempty cache."""
+    dst = Path(dst)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.is_file() and dst.stat().st_size > 0:
+        return dst
+
+    temporary = None
+    try:
+        with requests.get(url, stream=True, timeout=(30, 120)) as response:
+            response.raise_for_status()
+            with tempfile.NamedTemporaryFile(
+                mode="wb", dir=dst.parent, prefix=dst.name + ".", suffix=".part", delete=False
+            ) as output:
+                temporary = Path(output.name)
+                with tqdm(desc=dst.name, unit="B", unit_scale=True) as progress:
+                    for chunk in response.iter_content(chunk_size=chunk_size):
+                        if chunk:
+                            output.write(chunk)
+                            progress.update(len(chunk))
+            if temporary.stat().st_size == 0:
+                raise ValueError(f"Empty download: {url}")
+            os.replace(temporary, dst)
+            temporary = None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return dst
+
 
 REVIEWS_SCHEMA = pa.schema([
     ("user_id", pa.string()),
